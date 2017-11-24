@@ -19,7 +19,9 @@ float IndexFog(float4 pos)
 
 float4 Main3D(PS_IN ps_in) : SV_Target
 {
-    float4 diffuseColor = txDiffuse.Sample(samLinear, ps_in.tex) * texColor * ps_in.color * ambientColor;
-    float fog = IndexFog(ps_in.pos);
-    return float4(fog * diffuseColor.xyz + (1.0f - fog) * fogInfo.rgb, diffuseColor.a);
+    float4 diffuseColor = txDiffuse.Sample(samLinear, ps_in.tex);
+    diffuseColor.rgb *= texColor * ps_in.color * ambientColor;
+    return diffuseColor;
+    //float fog = IndexFog(ps_in.pos);
+    //return float4(fog * diffuseColor.xyz + (1.0f - fog) * fogInfo.rgb, diffuseColor.a);
 }

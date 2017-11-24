@@ -4,19 +4,19 @@ namespace Lobelia::Graphics {
 	private:
 		ComPtr<ID3D11Buffer> vertexBuffer;
 		std::vector<T> originBuffer;
-		std::vector<std::pair<std::string, int>> delimiters;
+		//std::vector<int> delimiters;
 		size_t bufferCount;
-		int delimiterCount;
+		//int delimiterCount;
 	public:
 		Mesh(int buffer_count);
 		~Mesh();
-		void SetDelimiters(const std::vector<std::pair<std::string, int>>& delimiters);
+		//void SetDelimiters(const std::vector<int>& delimiters);
 		const ComPtr<ID3D11Buffer>& GetVertexBuffer();
 		T* GetBuffer();
 		size_t GetCount();
 		const std::string& GetMaterialName(int delimiter_index);
-		int GetDelimiter(int index);
-		size_t GetDelimiterCount();
+		//int GetDelimiter(int index);
+		//size_t GetDelimiterCount();
 		void Update();
 		void Set();
 	};

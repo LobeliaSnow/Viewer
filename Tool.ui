@@ -20,11 +20,69 @@
    <widget class="QOpenGLWidget" name="openGLWidget">
     <property name="geometry">
      <rect>
-      <x>390</x>
-      <y>20</y>
-      <width>851</width>
+      <x>460</x>
+      <y>10</y>
+      <width>811</width>
       <height>521</height>
      </rect>
+    </property>
+   </widget>
+   <widget class="QListWidget" name="listWidget">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>520</y>
+      <width>431</width>
+      <height>141</height>
+     </rect>
+    </property>
+    <property name="dragEnabled">
+     <bool>true</bool>
+    </property>
+    <property name="dragDropOverwriteMode">
+     <bool>false</bool>
+    </property>
+    <property name="dragDropMode">
+     <enum>QAbstractItemView::DragDrop</enum>
+    </property>
+    <property name="defaultDropAction">
+     <enum>Qt::MoveAction</enum>
+    </property>
+   </widget>
+   <widget class="QTextBrowser" name="textBrowser">
+    <property name="geometry">
+     <rect>
+      <x>460</x>
+      <y>540</y>
+      <width>811</width>
+      <height>121</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>111</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>出力アプリケーション名</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>10</y>
+      <width>311</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>unknown</string>
     </property>
    </widget>
   </widget>
@@ -39,9 +97,19 @@
    </property>
    <widget class="QMenu" name="menu">
     <property name="title">
-     <string>ファイル</string>
+     <string>&amp;File</string>
     </property>
+    <widget class="QMenu" name="menu_Save">
+     <property name="title">
+      <string>&amp;Save</string>
+     </property>
+     <addaction name="action_model_dxd"/>
+     <addaction name="actionmaterial_mt"/>
+     <addaction name="action_Animation_anm"/>
+     <addaction name="actionA_ll"/>
+    </widget>
     <addaction name="actionOpen"/>
+    <addaction name="menu_Save"/>
    </widget>
    <addaction name="menu"/>
   </widget>
@@ -57,6 +125,26 @@
   <action name="actionOpen">
    <property name="text">
     <string>&amp;Open</string>
+   </property>
+  </action>
+  <action name="action_model_dxd">
+   <property name="text">
+    <string>&amp;Model(.dxd)</string>
+   </property>
+  </action>
+  <action name="actionmaterial_mt">
+   <property name="text">
+    <string>M&amp;aterial(.mt)</string>
+   </property>
+  </action>
+  <action name="action_Animation_anm">
+   <property name="text">
+    <string>&amp;Animation(.anm)</string>
+   </property>
+  </action>
+  <action name="actionA_ll">
+   <property name="text">
+    <string>A&amp;ll</string>
    </property>
   </action>
  </widget>

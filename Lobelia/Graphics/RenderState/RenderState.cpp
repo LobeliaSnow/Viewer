@@ -108,9 +108,9 @@ namespace Lobelia::Graphics {
 		HRESULT hr = S_OK;
 		D3D11_SAMPLER_DESC desc = {};
 		SettingPreset(&desc, static_cast<int>(preset));
-		desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
-		desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
-		desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+		desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 		desc.MaxAnisotropy = max_anisotropy;
 		desc.ComparisonFunc = D3D11_COMPARISON_GREATER_EQUAL;
 		desc.MinLOD = -FLT_MAX;

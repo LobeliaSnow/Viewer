@@ -1,7 +1,5 @@
-#include "Lobelia.hpp"
-#include "FbxLoader.h"
-#include "Header/ModelImporter.hpp"
-#include "Header/ModelExporter.hpp"
+#include "Tool.h"
+
 #define EXCEPTION_FC(fc)		if (!fc)STRICT_THROW("ƒtƒ@ƒCƒ‹‘€ì‚É¸”s‚µ‚Ü‚µ‚½");
 
 namespace Lobelia {

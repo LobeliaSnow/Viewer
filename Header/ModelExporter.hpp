@@ -1,5 +1,6 @@
 #pragma once
 namespace Lobelia {
+	//TODO : 整形部分と保存部分を切り分けてビュアーで色々できるようにする。
 	class DxdExporter {
 	private:
 		struct WriteVertex {

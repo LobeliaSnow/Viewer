@@ -110,8 +110,10 @@
     <ClCompile Include="Lobelia\Graphics\Texture\Texture.cpp" />
     <ClCompile Include="Lobelia\Graphics\View\View.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\ModelExporter.cpp" />
     <ClCompile Include="Source\ModelImporter.cpp" />
+    <ClCompile Include="Source\ModelMolding.cpp" />
     <ClCompile Include="Tool.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -140,8 +142,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GeneratedFiles\ui_Tool.h" />
+    <ClInclude Include="Header\Camera.hpp" />
     <ClInclude Include="Header\ModelExporter.hpp" />
     <ClInclude Include="Header\ModelImporter.hpp" />
+    <ClInclude Include="Header\ModelMolding.hpp" />
     <ClInclude Include="Lobelia\Common\Common.hpp" />
     <ClInclude Include="Lobelia\Common\Define\Define.hpp" />
     <ClInclude Include="Lobelia\Common\Timer\Timer.h" />
@@ -195,6 +199,9 @@
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Data\ShaderFile\2D\Header2D.hlsli" />
+    <None Include="Data\ShaderFile\3D\Header3D.hlsli" />
+    <None Include="Data\ShaderFile\Header.hlsli" />
     <None Include="Lobelia\Common\Timer\Timer.inl" />
     <None Include="Lobelia\Common\Utility\FileController\FileController.inl" />
     <None Include="Lobelia\Common\Utility\ResourceBank\ResourceBank.inl" />
@@ -206,6 +213,28 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="DxdFormat.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Data\ShaderFile\2D\PS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\2D\User.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\2D\VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\3D\PS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\3D\VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -256,4 +256,13 @@ namespace Lobelia::Math {
 		if (cross < 0.0f)rad *= -1;
 		return rad;
 	}
+	__forceinline float CalcRadianToVectors(const Vector3& v1, const Vector3& v2)noexcept {
+		Vector3 temp1 = v1, temp2 = v2;
+		float cosƒÆ = Vector3::Dot(temp1, temp2) / (temp1.Length()*temp2.Length());
+		float rad = acosf(cosƒÆ);
+		float cross = Vector3::Cross(temp1, temp2).x;
+		if (cross < 0.0f)rad *= -1;
+		return rad;
+	}
+
 }

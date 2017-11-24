@@ -41,6 +41,15 @@
     <Filter Include="Lobelia">
       <UniqueIdentifier>{057708f4-6c44-4aaa-bae4-a24c48633eb6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shader">
+      <UniqueIdentifier>{3ed1b6e6-08a2-4237-ae20-7fdef3c3e0ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shader\2D">
+      <UniqueIdentifier>{25b1ec30-65a6-4806-8841-3c22067e6700}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shader\3D">
+      <UniqueIdentifier>{c70aa551-cfbc-42a3-9576-881d4c490f6e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -131,6 +140,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\ModelExporter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ModelMolding.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -272,6 +287,12 @@
     <ClInclude Include="Header\ModelExporter.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Header\ModelMolding.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Header\Camera.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Lobelia\Graphics\ConstantBuffer\ConstantBuffer.inl">
@@ -298,8 +319,34 @@
     <None Include="Lobelia\Common\Window\Window.inl">
       <Filter>Lobelia</Filter>
     </None>
+    <None Include="Data\ShaderFile\2D\Header2D.hlsli">
+      <Filter>Shader\2D</Filter>
+    </None>
+    <None Include="Data\ShaderFile\3D\Header3D.hlsli">
+      <Filter>Shader\3D</Filter>
+    </None>
+    <None Include="Data\ShaderFile\Header.hlsli">
+      <Filter>Shader</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="DxdFormat.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Data\ShaderFile\2D\User.hlsl">
+      <Filter>Shader\2D</Filter>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\2D\VS.hlsl">
+      <Filter>Shader\2D</Filter>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\2D\PS.hlsl">
+      <Filter>Shader\2D</Filter>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\3D\VS.hlsl">
+      <Filter>Shader\3D</Filter>
+    </FxCompile>
+    <FxCompile Include="Data\ShaderFile\3D\PS.hlsl">
+      <Filter>Shader\3D</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

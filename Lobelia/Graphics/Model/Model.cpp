@@ -1,4 +1,5 @@
 #include "Common/Common.hpp"
+#include "Graphics/Transform/Transform.hpp"
 #include "Graphics/Origin/Origin.hpp"
 #include "Exception/Exception.hpp"
 #include "Graphics/ConstantBuffer/ShaderStageList.hpp"
@@ -14,264 +15,524 @@
 #include "Graphics/Material/Material.hpp"
 #include "Graphics/Shader/Reflection/Reflection.hpp"
 #include "Graphics/Model/Model.hpp"
-
 #include "Graphics/RenderState/RenderState.hpp"
 #include "Graphics/Pipeline/Pipeline.hpp"
-//結局ソースが汚くなってしまった。。。
-//アニメーションは悪くない
-//サブセットの管理をきれいにする
+
 namespace Lobelia::Graphics {
-	Animation::Animation(const char* file_path) :constantBuffer(std::make_unique<ConstantBuffer<Constant>>(3, ShaderStageList::VS)), time(0.0f) {
-		std::unique_ptr<Utility::FileController> fc = std::make_unique<Utility::FileController>();
+#define EXCEPTION_FC(fc)		if (!fc)STRICT_THROW("ファイル操作に失敗しました");
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Dxd
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	DxdImporter::DxdImporter(const char* file_path) {
+		std::shared_ptr<Utility::FileController> fc = std::make_unique<Utility::FileController>();
+		//ファイル開く
 		fc->Open(file_path, Utility::FileController::OpenMode::ReadBinary);
-		fc->Read(animationName, sizeof(char) * 32, sizeof(char) * 32, 1);
-		fc->Read(&framePerCount, sizeof(int), sizeof(int), 1);
-		fc->Read(&frameCount, sizeof(int), sizeof(int), 1);
+		//開かれているかどうか？
+		if (!fc->IsOpen())STRICT_THROW("ファイルが開けませんでした");
+		//メッシュ読み込み
+		MeshLoad(fc);
+		//スキン読み込み
+		SkinLoad(fc);
+		//終了
+		fc->Close();
+	}
+	DxdImporter::~DxdImporter() = default;
+	void DxdImporter::MeshLoad(std::weak_ptr<Utility::FileController> file) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		//メッシュ数取得
 		fc->Read(&meshCount, sizeof(int), sizeof(int), 1);
-		keyFrames.resize(meshCount);
 		for (int meshIndex = 0; meshIndex < meshCount; meshIndex++) {
-			fc->Read(&clusterCount, sizeof(int), sizeof(int), 1);
-			keyFrames[meshIndex].resize(clusterCount);
-			for (int clusterIndex = 0; clusterIndex < clusterCount; clusterIndex++) {
+			VertexLoad(file);
+		}
+	}
+	void DxdImporter::VertexLoad(std::weak_ptr<Utility::FileController> file) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		Mesh mesh = {};
+		//インデックス数取得
+		fc->Read(&mesh.indexCount, sizeof(int), sizeof(int), 1);
+		//uv数取得
+		fc->Read(&mesh.uvCount, sizeof(int), sizeof(int), 1);
+		mesh.vertices.resize(mesh.indexCount);
+		//Vertex取得
+		fc->Read(mesh.vertices.data(), sizeof(Vertex)*mesh.indexCount, sizeof(Vertex), mesh.indexCount);
+		//マテリアル名取得
+		fc->Read(&mesh.materialNameLength, sizeof(int), sizeof(int), 1);
+		//マテリアル名
+		char* temp = new char[mesh.materialNameLength];
+		fc->Read(temp, sizeof(char)*mesh.materialNameLength, sizeof(char), mesh.materialNameLength);
+		mesh.materialName = temp;
+		delete[] temp;
+		//メッシュ追加
+		meshes.push_back(mesh);
+	}
+	void DxdImporter::SkinLoad(std::weak_ptr<Utility::FileController> file) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		clusterCount.resize(meshCount);
+		for (int meshIndex = 0; meshIndex < meshCount; meshIndex++) {
+			bool isEntity = false;
+			//ボーンを持っているか否か
+			fc->Read(&isEntity, sizeof(bool), sizeof(bool), 1);
+			//ボーン持っていなければ終了
+			if (!isEntity) {
+				meshsBoneInfo.push_back({});
+				continue;
+			}
+			ClusterLoad(file, meshIndex);
+		}
+	}
+	void DxdImporter::ClusterLoad(std::weak_ptr<Utility::FileController> file, int mesh_index) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		Bone bone = {};
+		bone.isEntity = true;
+		int indexCount = 0;
+		//頂点数取得
+		fc->Read(&indexCount, sizeof(int), sizeof(int), 1);
+		//頂点数分だけバッファ確保
+		bone.infos.resize(indexCount);
+		for (int i = 0; i < indexCount; i++) {
+			int impactSize = 0;
+			//影響数保存
+			fc->Read(&impactSize, sizeof(int), sizeof(int), 1);
+			bone.infos[i].resize(impactSize);
+			//影響度保存
+			fc->Read(bone.infos[i].data(), sizeof(Bone::Info)*impactSize, sizeof(Bone::Info), impactSize);
+		}
+		//クラスター数取得
+		fc->Read(&clusterCount[mesh_index], sizeof(int), sizeof(int), 1);
+		//クラスター数分だけバッファ確保
+		bone.initPoseMatrices.resize(clusterCount[mesh_index]);
+		std::vector<DirectX::XMFLOAT4X4> matrices(clusterCount[mesh_index]);
+		//初期姿勢行列取得
+		fc->Read(matrices.data(), sizeof(DirectX::XMFLOAT4X4)*clusterCount[mesh_index], sizeof(DirectX::XMFLOAT4X4), clusterCount[mesh_index]);
+		for (int i = 0; i < clusterCount[mesh_index]; i++) {
+			bone.initPoseMatrices[i] = DirectX::XMLoadFloat4x4(&matrices[i]);
+		}
+		//ボーン追加
+		meshsBoneInfo.push_back(bone);
+	}
+	int DxdImporter::GetMeshCount() { return meshCount; }
+	const std::vector<DxdImporter::Mesh>& DxdImporter::GetMeshes() { return meshes; }
+	DxdImporter::Mesh& DxdImporter::GetMesh(int index) { return meshes[index]; }
+	int DxdImporter::GetBoneCount(int mesh_index) { return clusterCount[mesh_index]; }
+	const std::vector<DxdImporter::Bone>& DxdImporter::GetMeshsBoneInfos() { return meshsBoneInfo; }
+	const DxdImporter::Bone& DxdImporter::GetMeshBoneInfo(int index) { return meshsBoneInfo[index]; }
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// material
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	MaterialImporter::MaterialImporter(const char* file_path) {
+		std::shared_ptr<Utility::FileController> fc = std::make_shared<Utility::FileController>();
+		fc->Open(file_path, Utility::FileController::OpenMode::ReadBinary);
+		if (!fc->IsOpen())STRICT_THROW("ファイルを開けませんでした");
+		Load(fc);
+		fc->Close();
+	}
+	MaterialImporter::~MaterialImporter() = default;
+	void MaterialImporter::Load(std::weak_ptr<Utility::FileController> file) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		//マテリアル数取得
+		fc->Read(&materialCount, sizeof(int), sizeof(int), 1);
+		materials.resize(materialCount);
+		auto StringLoad = [&](int* count, std::string* str) {
+			fc->Read(count, sizeof(int), sizeof(int), 1);
+			//バッファ確保
+			char* temp = new char[*count];
+			//マテリアル名取得
+			fc->Read(temp, sizeof(char)*(*count), sizeof(char), *count);
+			*str = temp;
+			//バッファ解放
+			delete[] temp;
+		};
+		for (int i = 0; i < materialCount; i++) {
+			Material material = {};
+			//マテリアル名取得
+			StringLoad(&material.nameLength, &material.name);
+			//テクスチャ名取得
+			StringLoad(&material.textureNameLength, &material.textureName);
+			//マテリアル追加
+			materials[i] = material;
+		}
+	}
+	int MaterialImporter::GetMaterialCount() { return materialCount; }
+	const std::vector<MaterialImporter::Material>&  MaterialImporter::GetMaterials() { return materials; }
+	const MaterialImporter::Material& MaterialImporter::GetMaterial(int index) { return materials[index]; }
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// anm
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	AnimationImporter::AnimationImporter(const char* file_path) {
+		std::shared_ptr<Utility::FileController> fc = std::make_shared<Utility::FileController>();
+		fc->Open(file_path, Utility::FileController::OpenMode::ReadBinary);
+		if (!fc->IsOpen())STRICT_THROW("アニメーションファイルが開けませんでした");
+		//名前取得
+		LoadName(fc);
+		//基本情報取得
+		SettingLoad(fc);
+		//キーフレーム取得
+		KeyFramesLoad(fc);
+		fc->Close();
+	}
+	AnimationImporter::~AnimationImporter() = default;
+	void AnimationImporter::LoadName(std::weak_ptr<Utility::FileController> file) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		//マテリアル名取得
+		fc->Read(&nameLength, sizeof(int), sizeof(int), 1);
+		//バッファ確保
+		char* temp = new char[nameLength];
+		//マテリアル名
+		fc->Read(temp, sizeof(char)*nameLength, sizeof(char), nameLength);
+		name = temp;
+		delete[] temp;
+	}
+	void AnimationImporter::SettingLoad(std::weak_ptr<Utility::FileController> file) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		//1秒あたりのフレーム数取得
+		fc->Read(&framePerSecond, sizeof(int), sizeof(int), 1);
+		//総フレーム数取得
+		fc->Read(&keyFrameCount, sizeof(int), sizeof(int), 1);
+		//メッシュ数取得
+		fc->Read(&meshCount, sizeof(int), sizeof(int), 1);
+	}
+	void AnimationImporter::KeyFramesLoad(std::weak_ptr<Utility::FileController> file) {
+		std::shared_ptr<Utility::FileController> fc = file.lock();
+		EXCEPTION_FC(fc);
+		infos.resize(meshCount);
+		for (int i = 0; i < meshCount; i++) {
+			Info info = {};
+			//クラスター数取得
+			fc->Read(&info.clusetCount, sizeof(int), sizeof(int), 1);
+			//バッファ確保
+			info.clusterFrames.resize(info.clusetCount);
+			for (int clusterIndex = 0; clusterIndex < info.clusetCount; clusterIndex++) {
+				info.clusterFrames[clusterIndex].keyFrames.resize(keyFrameCount);
+				//キーフレーム取得
+				fc->Read(info.clusterFrames[clusterIndex].keyFrames.data(), sizeof(DirectX::XMFLOAT4X4)*keyFrameCount, sizeof(DirectX::XMFLOAT4X4), keyFrameCount);
+			}
+			//キーフレーム情報取得
+			infos[i] = info;
+		}
+	}
+	const std::string& AnimationImporter::GetName() { return name; }
+	int AnimationImporter::GetSampleFramePerSecond() { return framePerSecond; }
+	int AnimationImporter::GetKeyFrameCount() { return keyFrameCount; }
+	int AnimationImporter::GetMeshCount() { return meshCount; }
+	const std::vector<AnimationImporter::Info>& AnimationImporter::GetInfos() { return infos; }
+	const AnimationImporter::Info& AnimationImporter::GetInfo(int index) { return infos[index]; }
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Animation
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	Animation::Animation(const char* file_path) :constantBuffer(std::make_unique<ConstantBuffer<Constant>>(3, ShaderStageList::VS)), time(0.0f) {
+		std::shared_ptr<Lobelia::Graphics::AnimationImporter> importer = std::make_unique<Lobelia::Graphics::AnimationImporter>(file_path);
+		//アニメーション名取得
+		name = importer->GetName();
+		//メッシュ数取得
+		meshCount = importer->GetMeshCount();
+		//1秒あたりのサンプルフレーム数取得
+		framePerCount = importer->GetSampleFramePerSecond();
+		//フレーム数取得
+		frameCount = importer->GetKeyFrameCount();
+		//バッファ確保
+		clusterCount.resize(meshCount);
+		keyFrames.resize(meshCount);
+		//キーフレーム取得開始
+		for (int meshIndex = 0; meshIndex < meshCount; meshIndex++) {
+			//メッシュごとのクラスター数取得
+			clusterCount[meshIndex] = importer->GetInfo(meshIndex).clusetCount;
+			//バッファ確保
+			keyFrames[meshIndex].resize(clusterCount[meshIndex]);
+			for (int clusterIndex = 0; clusterIndex < clusterCount[meshIndex]; clusterIndex++) {
+				//バッファ確保
 				keyFrames[meshIndex][clusterIndex].resize(frameCount);
-				fc->Read(keyFrames[meshIndex][clusterIndex].data(), sizeof(DirectX::XMFLOAT4X4)* frameCount, sizeof(DirectX::XMFLOAT4X4), frameCount);
+				for (int frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+					//各メッシュの各クラスターにあるキーフレームを取得
+					keyFrames[meshIndex][clusterIndex][frameIndex] = importer->GetInfo(meshIndex).clusterFrames[clusterIndex].keyFrames[frameIndex];
+				}
 			}
 		}
-		fc->Close();
 	}
 	Animation::~Animation() = default;
 	void Animation::AddElapsedTime(float time) {
 		this->time += time;
-		//よく考えること
+		//アニメーションの最大値を取得
 		int animationMax = (frameCount - 1)*(1000 / framePerCount);
 		if (this->time >= animationMax)this->time -= animationMax;
 	}
-	void Animation::Activate(int meshIndex) {
+	void Animation::Update(int meshIndex) {
 		//補間等ごちゃごちゃしないといけない
-		for (int i = 0; i < clusterCount; i++) {
-			DirectX::XMMATRIX renderTransform = DirectX::XMLoadFloat4x4(&keyFrames[meshIndex][i][static_cast<int>(time / 16)]);
+		for (int i = 0; i < clusterCount[meshIndex]; i++) {
+			DirectX::XMMATRIX renderTransform = DirectX::XMLoadFloat4x4(&keyFrames[meshIndex][i][static_cast<int>(time / (1000 / framePerCount))]);
 			renderTransform = DirectX::XMMatrixTranspose(renderTransform);
 			//本当はここで補間
 			DirectX::XMStoreFloat4x4(&buffer.keyFrame[i], renderTransform);
 		}
 		constantBuffer->Activate(buffer);
 	}
-	Model::Model() : animationIndex(-1), pos(), scale(1.0f, 1.0f, 1.0f), euler(), world(DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity())) {
-		VertexShader* vs = ShaderBank::Get<VertexShader>(DEFAULT_VERTEX_SHADER_STATIC_MODEL);
-		std::unique_ptr<Reflection> reflector = std::make_unique<Reflection>(vs);
-		inputLayout = std::make_unique<InputLayout>(vs, reflector.get());
-		//std::unique_ptr<ConstantBuffer<DirectX::XMMATRIX>> world;
-		constantBuffer = std::make_unique<ConstantBuffer<DirectX::XMMATRIX>>(1, Graphics::ShaderStageList::VS | Graphics::ShaderStageList::PS);
-	}
+	const std::string& Animation::GetName() { return name; }
 
-	Model::Model(const Desc& desc) :Model() {
-		Construction(desc);
-	}
-	Model::Model(const char* file_path) : Model() {
-		std::unique_ptr<Utility::FileController> fc = std::make_unique<Utility::FileController>();
-		fc->Open(file_path, Utility::FileController::OpenMode::ReadBinary);
-		int meshCount = 0;
-		fc->Read(&meshCount, sizeof(int), sizeof(int), 1);
-		int vertexCount = 0;
-		std::vector<Model::ReadVertex> vertices;
-		std::vector<std::string> verticesMaterialNames;
-		std::vector<int> delimiters(meshCount);
-		//Mesh Read
-		for (int i = 0; i < meshCount; i++) {
-			int vertexCountLocal = -1;
-			fc->Read(&vertexCountLocal, sizeof(int), sizeof(int), 1);
-			vertexCount += vertexCountLocal;
-			delimiters[i] = vertexCountLocal;
-			std::vector<Model::ReadVertex> verticesLocal(vertexCountLocal);
-			int a = static_cast<int>(fc->Read(verticesLocal.data(), sizeof(Model::ReadVertex)*vertexCountLocal, sizeof(Model::ReadVertex), vertexCountLocal));
-			vertices.insert(vertices.end(), verticesLocal.begin(), verticesLocal.end());
-			char tempMaterial[64] = {};
-			fc->Read(tempMaterial, 64, 64, 1);
-			verticesMaterialNames.push_back(tempMaterial);
-		}
-		int materialCount = -1;
-		fc->Read(&materialCount, sizeof(int), sizeof(int), 1);
-		std::vector<std::string> materialNames(materialCount);
-		std::vector<std::string> textureNames(materialCount);
-		std::string parentPath = Utility::FilePathControl::GetParentDirectory(file_path);
-		std::vector<Math::Vector3> diffuses;
-		std::vector<Math::Vector3> ambients;
-		std::vector<Math::Vector3> speculars;
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		//Material Read
-		for (int i = 0; i < materialCount; i++) {
-			char tempMaterial[64] = {};
-			char tempTexture[256] = {};
-			fc->Read(tempMaterial, 64, 64, 1);
-			fc->Read(tempTexture, 256, 256, 1);
-			materialNames[i] = tempMaterial;
-			textureNames[i] = tempTexture;
-			if (!parentPath.empty())	textureNames[i] = parentPath + "\\" + textureNames[i];
-			Math::Vector3 diffuse, ambient, specular;
-			fc->Read(&diffuse, sizeof(Math::Vector3), sizeof(Math::Vector3), 1);
-			fc->Read(&ambient, sizeof(Math::Vector3), sizeof(Math::Vector3), 1);
-			fc->Read(&specular, sizeof(Math::Vector3), sizeof(Math::Vector3), 1);
-			diffuses.push_back(diffuse);	ambients.push_back(ambient);	speculars.push_back(specular);
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Model
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	Model::Model(const char* dxd_path, const char* mt_path) :allMeshVertexCountSum(0), world() {
+		StateInitialize();
+		std::shared_ptr<DxdImporter> dxd = std::make_unique<DxdImporter>(dxd_path);
+		std::shared_ptr<MaterialImporter> mt = std::make_unique<MaterialImporter>(mt_path);
+		//総点数算出
+		for (int i = 0; i < dxd->GetMeshCount(); i++) {
+			//各メッシュの頂点数を足し合わせる
+			allMeshVertexCountSum += dxd->GetMesh(i).indexCount;
 		}
-		//メッシュ数分の配列
-		std::vector<int> clusterCounts(meshCount);
-		std::vector<int> indexCounts(meshCount);
-		//メッシュ数->頂点数->影響ボーン数
-		std::vector<std::vector<std::vector<BoneInfo>>> boneInfos(meshCount);
-		//メッシュ数->クラスター数
-		std::vector<std::vector<DirectX::XMFLOAT4X4>> initPoseMatrices(meshCount);
-		//メッシュ数->頂点数
-		std::vector<std::vector<int>> boneImpactSize(meshCount);
-
-		for (int meshIndex = 0; meshIndex < meshCount; meshIndex++) {
-			fc->Read(&clusterCounts[meshIndex], sizeof(int), sizeof(int), 1);
-			//一応
-			fc->Read(&indexCounts[meshIndex], sizeof(int), sizeof(int), 1);
-			boneInfos[meshIndex].resize(indexCounts[meshIndex]);
-			boneImpactSize[meshIndex].resize(indexCounts[meshIndex]);
-			for (int vertexIndex = 0; vertexIndex < indexCounts[meshIndex]; vertexIndex++) {
-				int renderTransform = -1;
-				fc->Read(&renderTransform, sizeof(int), sizeof(int), 1);
-				boneImpactSize[meshIndex][vertexIndex] = renderTransform;
-				boneInfos[meshIndex][vertexIndex].resize(renderTransform);
-				fc->Read(boneInfos[meshIndex][vertexIndex].data(), sizeof(BoneInfo)*renderTransform, sizeof(BoneInfo), renderTransform);
-			}
-			initPoseMatrices[meshIndex].resize(clusterCounts[meshIndex]);
-			fc->Read(initPoseMatrices[meshIndex].data(), sizeof(DirectX::XMFLOAT4X4)*clusterCounts[meshIndex], sizeof(DirectX::XMFLOAT4X4), clusterCounts[meshIndex]);
+		//メッシュバッファ確保
+		mesh = std::make_unique<Mesh<Vertex>>(allMeshVertexCountSum);
+		//頂点構成
+		ConfigureVertex(dxd);
+		//マテリアル構成
+		std::string directory = Utility::FilePathControl::GetParentDirectory(mt_path);
+		if (!directory.empty())directory += "/";
+		ConfigureMaterial(mt, directory);
+		//バッファ確保
+		renderIndexMaterial.resize(dxd->GetMeshCount());
+		//描画順にマテリアルへのポインタ整列
+		for (int i = 0; i < dxd->GetMeshCount(); i++) {
+			renderIndexMaterial[i] = materials[dxd->GetMesh(i).materialName].get();
 		}
-		fc->Close();
-		Model::Desc desc = {};
-		desc.vertex_count = vertexCount;
-		desc.vertex = vertices.data();
-		desc.delimiter_count = delimiters.size();
-		desc.delimiters = delimiters.data();
-		desc.vertex_material_name = verticesMaterialNames.data();
-		desc.material_count = materialCount;
-		desc.names = materialNames.data();
-		desc.texture_names = textureNames.data();
-		desc.diffuses = diffuses.data();
-		desc.ambients = ambients.data();
-		desc.speculars = speculars.data();
-		//メッシュ数分の配列
-		desc.clusterCounts = &clusterCounts;
-		desc.indexCounts = &indexCounts;
-		//メッシュ数->頂点数->影響ボーン数
-		desc.boneInfos = &boneInfos;
-		//メッシュ数->クラスター数
-		desc.initPoseMatrices = &initPoseMatrices;
-		desc.boneImpactSize = &boneImpactSize;
-		Construction(desc);
+		SetTransformAndCalcMatrix(transform);
+		CalculationWorldMatrix();
 	}
 	Model::~Model() = default;
-	void Model::Construction(const Desc& desc) {
-		try {
-			//メッシュ数分の配列
-			std::vector<int> clusterCounts;
-			std::vector<int> indexCounts;
-			//メッシュ数->頂点数->影響ボーン数
-			std::vector<std::vector<std::vector<BoneInfo>>> boneInfos;
-			//メッシュ数->クラスター数
-			std::vector<std::vector<DirectX::XMFLOAT4X4>> initPoseMatrices;
-			//メッシュ数->頂点数
-			std::vector<std::vector<int>> boneImpactSize;
-
-			std::vector<std::pair<std::string, int>> localDelimiters;
-			mesh = std::make_unique<Mesh<Vertex>>(static_cast<int>(desc.vertex_count));
-			for (int i = 0; i < desc.vertex_count; i++) {
-				mesh->GetBuffer()[i].pos = desc.vertex[i].pos;
-				mesh->GetBuffer()[i].pos.w = 1.0f;
-				mesh->GetBuffer()[i].normal = desc.vertex[i].normal;
-				mesh->GetBuffer()[i].tex = desc.vertex[i].tex;
+	void Model::StateInitialize() {
+		//アクティブなアニメーションは無し(-1)
+		activeAnimation = -1;
+		//デフォルトの頂点シェーダー取得
+		VertexShader* vs = ShaderBank::Get<VertexShader>(DEFAULT_VERTEX_SHADER_STATIC_MODEL);
+		//リフレクション開始
+		std::unique_ptr<Reflection> reflector = std::make_unique<Reflection>(vs);
+		//入力レイアウト作成
+		inputLayout = std::make_unique<InputLayout>(vs, reflector.get());
+		//コンスタントバッファ作成
+		constantBuffer = std::make_unique<ConstantBuffer<DirectX::XMMATRIX>>(1, Graphics::ShaderStageList::VS);
+		//親は設定されていない
+		parent = nullptr;
+		transform = {};
+		transform.scale = Math::Vector3(1.0f, 1.0f, 1.0f);
+		animationCount = 0;
+	}
+	void Model::ConfigureVertex(std::weak_ptr<DxdImporter> dxd) {
+		std::shared_ptr<DxdImporter> importer = dxd.lock();
+		if (!importer)STRICT_THROW("インポーターが取得できませんでした");
+		int log = 0;
+		for (int meshIndex = 0, index = 0, boneIndex = 0; meshIndex < importer->GetMeshCount(); meshIndex++) {
+			auto& dxdMesh = importer->GetMesh(meshIndex);
+			//頂点数取得
+			int vertexCount = dxdMesh.indexCount;
+			//頂点情報(一部)取得
+			for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++, index++) {
+				mesh->GetBuffer()[index].pos = dxdMesh.vertices[vertexIndex].pos;
+				mesh->GetBuffer()[index].normal = dxdMesh.vertices[vertexIndex].normal;
+				mesh->GetBuffer()[index].tex = dxdMesh.vertices[vertexIndex].tex;
 			}
-			for (int i = 0; i < desc.material_count; i++) {
-				materials[desc.names[i]] = std::make_shared<Material>(desc.names[i].c_str(), desc.texture_names[i].c_str());
-				Math::Vector4 diffuse = Math::Vector4(desc.diffuses[i].x, desc.diffuses[i].y, desc.diffuses[i].z, 1.0f);
-				materials[desc.names[i]]->SetDiffuseColor(diffuse);
-				Math::Vector4 ambient = Math::Vector4(desc.ambients[i].x, desc.ambients[i].y, desc.ambients[i].z, 1.0f);
-				materials[desc.names[i]]->SetAmbientColor(ambient);
-				Math::Vector4 specular = Math::Vector4(desc.speculars[i].x, desc.speculars[i].y, desc.speculars[i].z, 1.0f);
-				materials[desc.names[i]]->SetSpecularColor(specular);
-				materials[desc.names[i]]->SetTexColor(0xFFFFFFFF);
-			}
-			localDelimiters.resize(desc.delimiter_count);
-			renderIndexMaterial.resize(desc.delimiter_count);
-			for (int i = 0; i < desc.delimiter_count; i++) {
-				renderIndexMaterial[i] = (materials[desc.vertex_material_name[i]].get());
-				localDelimiters[i].first = desc.vertex_material_name[i];
-				localDelimiters[i].second = desc.delimiters[i];
-			}
-			mesh->SetDelimiters(localDelimiters);
-			clusterCounts = *desc.clusterCounts;
-			indexCounts = *desc.indexCounts;
-			//メッシュ数->頂点数->影響ボーン数
-			boneInfos = *desc.boneInfos;
-			//メッシュ数->クラスター数
-			initPoseMatrices = *desc.initPoseMatrices;
-			boneImpactSize = *desc.boneImpactSize;
-			int currentPos = 0;
-			for (int i = 0; i < desc.delimiter_count; i++) {
-				for (int j = 0; j < desc.delimiters[i]; j++) {
-					for (int k = 0; k < 4; k++) {
-						if (k >= boneImpactSize[i][j]) {
-							mesh->GetBuffer()[currentPos].clusteIndex[k] = 0;
-							mesh->GetBuffer()[currentPos].weights.v[k] = 0;
-						}
-						else {
-							mesh->GetBuffer()[currentPos].clusteIndex[k] = boneInfos[i][j][k].clusterIndex;
-							mesh->GetBuffer()[currentPos].weights.v[k] = boneInfos[i][j][k].weight;
-						}
-					}
-					currentPos++;
+			//ボーン情報構成
+			ConfigureBones(dxd, meshIndex, &boneIndex);
+			//サブセット構築
+			Subset subset = { meshIndex, log, importer->GetMesh(meshIndex).indexCount };
+			//メッシュ開始地点を次へずらす
+			log += importer->GetMesh(meshIndex).indexCount;
+			//サブセット追加
+			subsets.push_back(subset);
+		}
+	}
+	void Model::ConfigureBones(std::weak_ptr<DxdImporter> dxd, int mesh_index, int* vertex_index) {
+		std::shared_ptr<DxdImporter> importer = dxd.lock();
+		if (!importer)STRICT_THROW("インポーターが取得できませんでした");
+		//メッシュごとのボーン群取得
+		auto& meshBones = importer->GetMeshBoneInfo(mesh_index);
+		int indexCount = importer->GetMesh(mesh_index).indexCount;
+		//この時ボーンは生成されないので、少し注意。何か思わぬ誤作動があるかも？
+		if (!meshBones.isEntity) {
+			(*vertex_index) += indexCount;
+			return;
+		}
+		//頂点構成(残り)
+		for (int i = 0; i < indexCount; i++) {
+			int impactCount = i_cast(meshBones.infos[i].size());
+			for (int j = 0; j < 4; j++) {
+				if (j < impactCount) {
+					mesh->GetBuffer()[*vertex_index].clusteIndex[j] = meshBones.infos[i][j].clusterIndex;
+					mesh->GetBuffer()[*vertex_index].weights.v[j] = meshBones.infos[i][j].weight;
+				}
+				else {
+					mesh->GetBuffer()[*vertex_index].clusteIndex[j] = 0UL;
+					mesh->GetBuffer()[*vertex_index].weights.v[j] = 0.0f;
 				}
 			}
+			(*vertex_index)++;
 		}
-		catch (...) {
-			throw;
+		Bone bone = {};
+		//クラスター数取得
+		bone.clusterCount = importer->GetBoneCount(mesh_index);
+		//初期姿勢行列取得
+		for (int i = 0; i < bone.clusterCount; i++) {
+			bone.initPoseMatrices.push_back(meshBones.initPoseMatrices[i]);
+		}
+		bones.push_back(bone);
+	}
+	void Model::ConfigureMaterial(std::weak_ptr<MaterialImporter> mt, const std::string& directory) {
+		std::shared_ptr<MaterialImporter> importer = mt.lock();
+		int materialCount = importer->GetMaterialCount();
+		for (int i = 0; i < materialCount; i++) {
+			auto& material = importer->GetMaterial(i);
+			materials[material.name] = std::make_shared<Material>(material.name.c_str(), (directory + material.textureName).c_str());
 		}
 	}
-	void Model::LoadAnimation(const char* animation_path) { animations.push_back(std::make_unique<Animation>(animation_path)); }
-	//名前でもアクセスできるようにすること
-	void Model::AnimationUpdate(float time) { if (animationIndex > -1)animations[animationIndex]->AddElapsedTime(time); }
+	void Model::CalcTranslateMatrix() { translate = DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z); }
+	void Model::CalcScallingMatrix() { scalling = DirectX::XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z); }
+	void Model::SetTransformAndCalcMatrix(const Transform3D& transform) {
+		this->transform = transform;
+		Translation(transform.position);
+		RotationRollPitchYow(transform.rotation);
+		Scalling(transform.scale);
+	}
+	const Transform3D& Model::GetTransform() { return transform; }
+	void Model::LinkParent(Model* model) { parent = model; }
+	void Model::UnLinkParent() { parent = nullptr; }
+	//移動
+	void Model::Translation(const Math::Vector3& pos) {
+		transform.position = pos;
+		CalcTranslateMatrix();
+	}
+	void Model::Translation(float x, float y, float z) {
+		transform.position.x = x; transform.position.y = y; transform.position.z = z;
+		CalcTranslateMatrix();
+	}
+	void Model::TranslationMove(const Math::Vector3& move) {
+		transform.position += move;
+		CalcTranslateMatrix();
+	}
+	void Model::TranslationMove(float x, float y, float z) {
+		transform.position.x += x; transform.position.y += y; transform.position.z += z;
+		CalcTranslateMatrix();
+	}
+	//回転
+	void Model::RotationQuaternion(const DirectX::XMVECTOR& quaternion) {
+		rotation = DirectX::XMMatrixRotationQuaternion(quaternion);
+		//ここでトランスフォームの回転にRPYの回転量算出
+	}
+	void Model::RotationAxis(const Math::Vector3& axis, float rad) {
+		rotation = DirectX::XMMatrixRotationAxis(DirectX::XMVECTOR{ axis.x,axis.y,axis.z,1.0f }, rad);
+		//ここでトランスフォームの回転にRPYの回転量算出
+	}
+	void Model::RotationRollPitchYow(const Math::Vector3& rpy) {
+		transform.rotation = rpy;
+		rotation = DirectX::XMMatrixRotationRollPitchYaw(transform.rotation.x, transform.rotation.y, transform.rotation.z);
+	}
+	void Model::RotationYAxis(float rad) {
+		transform.rotation.x = 0.0f;	transform.rotation.y = rad; transform.rotation.z = 0.0f;
+		rotation = DirectX::XMMatrixRotationY(transform.rotation.y);
+	}
+	//拡縮
+	void Model::Scalling(const Math::Vector3& scale) {
+		transform.scale = scale;
+		CalcScallingMatrix();
+	}
+	void Model::Scalling(float x, float y, float z) {
+		transform.scale.x = x; transform.scale.y = y; transform.scale.z = z;
+		CalcScallingMatrix();
+	}
+	void Model::Scalling(float scale) {
+		transform.scale.x = scale; transform.scale.y = scale; transform.scale.z = scale;
+		CalcScallingMatrix();
+	}
+	//更新処理
+	void Model::CalculationWorldMatrix() {
+		//親子関係あるさいは自分のtransformは親から見たものになるが、ワールドの状態でも欲しいかな？
+		world = scalling;
+		world *= rotation;
+		//ここは少し審議が必要
+		world *= translate;
+		//親子関係周り
+		if (parent)world *= parent->world;
+		else world.m[0][0] *= -1;
+		//↑位置xを反転させる(FBX問題解消)
+		//親がいるとその行列ですでに-1掛けされているのでここでは必要がない(?)
+	}
+	void Model::GetTranslateMatrix(DirectX::XMMATRIX* translate) {
+		if (!translate)STRICT_THROW("translateがnullptrです");
+		*translate = this->translate;
+	}
+	void Model::CalcInverseTranslateMatrix(DirectX::XMMATRIX* inv_translate) {
+		if (!inv_translate)STRICT_THROW("inv_worldがnullptrです");
+		DirectX::XMVECTOR arg = {};
+		*inv_translate = DirectX::XMMatrixInverse(&arg, translate);
+	}
+	void Model::GetScallingMatrix(DirectX::XMMATRIX* scalling) {
+		if (!scalling)STRICT_THROW("scallingがnullptrです");
+		*scalling = this->scalling;
+	}
+	void Model::CalcInverseScallingMatrix(DirectX::XMMATRIX* inv_scalling) {
+		if (!inv_scalling)STRICT_THROW("inv_worldがnullptrです");
+		DirectX::XMVECTOR arg = {};
+		*inv_scalling = DirectX::XMMatrixInverse(&arg, scalling);
 
-	std::map<std::string, std::shared_ptr<Material>>& Model::GetMaterials() { return materials; }
-	Material* Model::GetMaterial(const std::string& material_name) { return materials[material_name].get(); }
-	std::string Model::GetMaterialName(int polygon_index) { return nullptr; }
-	void Model::ActivateAnimation(int index) { animationIndex = index; }
-	void Model::SetPos(const Math::Vector3& pos) { this->pos = pos; }
-	void Model::SetScale(const Math::Vector3& scale) { this->scale = scale; }
-	void Model::SetEuler(const Math::Vector3& euler) { this->euler = euler; }
-	void Model::Update() {
-		world = DirectX::XMMatrixScaling(scale.x, scale.y, scale.z);
-		world *= DirectX::XMMatrixRotationRollPitchYaw(euler.x, euler.y, euler.z);
-		world *= DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
-		world = DirectX::XMMatrixTranspose(world);
 	}
-	//TODO : 後は読み込みの段階でマテリアルが共通のものを1つにまとめるようにしたほうが良い
-	//その際スキンメッシュに気を付けること、あくまでも最初にスキンメッシュをしてから取り掛かる
-	//TODO : ワールド変換行列を取得できるようにする。
-	void Model::Render(bool set_default_pipeline) {
-		mesh->Set(); inputLayout->Set(); constantBuffer->Activate(world);
+	void Model::GetRotationMatrix(DirectX::XMMATRIX* rotation) {
+		if (!rotation)STRICT_THROW("rotationがnullptrです");
+		*rotation = this->rotation;
+	}
+	void Model::CalcInverseRotationMatrix(DirectX::XMMATRIX* inv_rotation) {
+		if (!inv_rotation)STRICT_THROW("inv_rotationがnullptrです");
+		DirectX::XMVECTOR arg = {};
+		*inv_rotation = DirectX::XMMatrixInverse(&arg, rotation);
+	}
+	void Model::GetWorldMatrix(DirectX::XMMATRIX* world) {
+		if (!world)STRICT_THROW("worldがnullptrです");
+		*world = this->world;
+	}
+	void Model::CalcInverseWorldMatrix(DirectX::XMMATRIX* inv_world) {
+		if (!inv_world)STRICT_THROW("inv_worldがnullptrです");
+		DirectX::XMVECTOR arg = {};
+		*inv_world = DirectX::XMMatrixInverse(&arg, world);
+	}
+	AnimationNo Model::AnimationLoad(const char* file_path) {
+		animations.push_back(std::make_unique<Animation>(file_path));
+		return animationCount++;
+	}
+	void Model::AnimationActivate(AnimationNo index) {
+		if (index >= animationCount)STRICT_THROW("存在しないアニメーションです");
+		activeAnimation = index;
+	}
+	void Model::AnimationInActive() { activeAnimation = -1; }
+	const std::string& Model::GetAnimationName(AnimationNo index) { return animations[index]->GetName(); }
+	void Model::AnimationUpdate(float elapsed_time) { animations[activeAnimation]->AddElapsedTime(elapsed_time); }
+	void Model::Render(bool no_set) {
+		mesh->Set(); inputLayout->Set(); constantBuffer->Activate(DirectX::XMMatrixTranspose(world));
 		Device::GetContext()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		int delimiterSize = static_cast<int>(mesh->GetDelimiterCount());
-		if (set_default_pipeline) {
-			if (animationIndex > -1)Graphics::PipelineManager::PipelineGet("Default3DSkin")->Activate(true);
-			else Graphics::PipelineManager::PipelineGet("Default3D")->Activate(true);
+		if (!no_set) {
+			//スキニングするか否か
+			if (activeAnimation > -1) Graphics::PipelineManager::PipelineGet(DEFAULT_PIPELINE_DYNAMIC_MODEL)->Activate(true);
+			else Graphics::PipelineManager::PipelineGet(DEFAULT_PIPELINE_STATIC_MODEL)->Activate(true);
 		}
-		int log = 0;
-		//このあたり考えて
-		for (int i = 0; i < delimiterSize; i++) {
-			int vertexCount = mesh->GetDelimiter(i);
-			if (animationIndex > -1)	animations[animationIndex]->Activate(i);
-			if (!renderIndexMaterial[i]->IsVisible()) {
-				log += vertexCount;
-				continue;
-			}
-			renderIndexMaterial[i]->Set(true, true);
-			Device::GetContext()->Draw(vertexCount, log);
-			log += vertexCount;
+		int meshIndex = 0;
+		for each(auto subset in subsets) {
+			if (activeAnimation > -1)animations[activeAnimation]->Update(meshIndex);
+			subset.Render(this);
+			meshIndex++;
 		}
 	}
-
-
 }
-

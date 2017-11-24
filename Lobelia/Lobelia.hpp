@@ -87,7 +87,7 @@ namespace Lobelia {
 	inline void CreateDefaultPipeline() {
 		//‹¤’Ê•”
 		Graphics::RenderStateBank::BlendFactory("Copy", Graphics::BlendPreset::COPY, true, true);
-		Graphics::RenderStateBank::BlendFactory("Add", Graphics::BlendPreset::ADD, true, false);
+		Graphics::RenderStateBank::BlendFactory("Add", Graphics::BlendPreset::ADD, true, true);
 		Graphics::RenderStateBank::BlendFactory("Copy NoAlphaCoverage", Graphics::BlendPreset::COPY, true, false);
 		Graphics::RenderStateBank::BlendFactory("Add NoAlphaCoverage", Graphics::BlendPreset::ADD, true, false);
 		Graphics::RenderStateBank::SamplerFactory("Point", Graphics::SamplerPreset::POINT);
@@ -128,8 +128,8 @@ namespace Lobelia {
 		Graphics::ShaderBank::Register<Graphics::VertexShader>(DEFAULT_VERTEX_SHADER_DYNAIMC_MODEL, "Data/Shaderfile/3D/VS.hlsl", "Main3D", Graphics::VertexShader::Model::VS_5_0);
 		Graphics::ShaderBank::Register<Graphics::PixelShader>(DEFAULT_PIXEL_SHADER_3D, "Data/Shaderfile/3D/PS.hlsl", "Main3D", Graphics::PixelShader::Model::PS_5_0);
 
-		Graphics::PipelineManager::PipelineRegister(DEFAULT_PIPELINE_STATIC_MODEL, new Graphics::Pipeline("Copy", "Anisotropic", STENCIL_STATE_OFF_Z_ON, "Cull Front", DEFAULT_VERTEX_SHADER_STATIC_MODEL, 0, nullptr, DEFAULT_PIXEL_SHADER_3D, 0, nullptr));
-		Graphics::PipelineManager::PipelineRegister(DEFAULT_PIPELINE_DYNAMIC_MODEL, new Graphics::Pipeline("Copy", "Anisotropic", STENCIL_STATE_OFF_Z_ON, "Cull Front", DEFAULT_VERTEX_SHADER_DYNAIMC_MODEL, 0, nullptr, DEFAULT_PIXEL_SHADER_3D, 0, nullptr));
+		Graphics::PipelineManager::PipelineRegister(DEFAULT_PIPELINE_STATIC_MODEL, new Graphics::Pipeline("Copy NoAlphaCoverage", "Anisotropic", STENCIL_STATE_OFF_Z_ON, "Cull Front", DEFAULT_VERTEX_SHADER_STATIC_MODEL, 0, nullptr, DEFAULT_PIXEL_SHADER_3D, 0, nullptr));
+		Graphics::PipelineManager::PipelineRegister(DEFAULT_PIPELINE_DYNAMIC_MODEL, new Graphics::Pipeline("Copy NoAlphaCoverage", "Anisotropic", STENCIL_STATE_OFF_Z_ON, "Cull Front", DEFAULT_VERTEX_SHADER_DYNAIMC_MODEL, 0, nullptr, DEFAULT_PIXEL_SHADER_3D, 0, nullptr));
 	}
 	inline void Bootup() {
 		srand(s_cast<unsigned>(time(NULL)));
