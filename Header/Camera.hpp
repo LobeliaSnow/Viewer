@@ -29,7 +29,8 @@ namespace Lobelia {
 		void MoveCursor();
 		//ƒJƒƒ‰À•WŒn‚Å‚ÌZˆÚ“®
 		void MoveZ(const Lobelia::Mouse& mouse);
-		void SphereMove(const Lobelia::Mouse& mouse);
+		void TargetPosMove(const Lobelia::Mouse& mouse, const Lobelia::Keyboard& keyboard);
+		void CylinderMove(const Lobelia::Mouse& mouse);
 		void CalcAndSetUpDirection();
 	public:
 		Camera(const Math::Vector2& view_scale);

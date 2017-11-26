@@ -73,6 +73,7 @@ namespace Lobelia {
 		constantBuffer = std::make_unique<Graphics::ConstantBuffer<DirectX::XMMATRIX>>(1, Graphics::ShaderStageList::VS);
 		//ワールド変換行列(単位行列)
 		world = DirectX::XMMatrixIdentity();
+		selectMesh = -1;
 	}
 	void ModelMolding::ConfigureStaticMesh(FL::Mesh* mesh) {
 		std::shared_ptr<Mesh> meshTemp = std::make_shared<Mesh>();
@@ -102,16 +103,29 @@ namespace Lobelia {
 		world = DirectX::XMMatrixScaling(0.3f, 0.3f, 0.3f);
 		constantBuffer->Activate(DirectX::XMMatrixTranspose(world));
 		Graphics::Device::GetContext()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		Graphics::PipelineManager::PipelineGet(DEFAULT_PIPELINE_STATIC_MODEL)->Activate(true);
+		auto pipeline = Graphics::PipelineManager::PipelineGet(DEFAULT_PIPELINE_STATIC_MODEL);
+		pipeline->Activate(true);
 		//doubleClicked
+		bool selected = false;
 		for (int i = 0; i < meshCount; i++) {
-			auto text = tool->GetUI().listWidget->item(i)->text();
+			auto item = tool->GetUI().listWidget->item(i);
+			auto text = item->text();
+			if (tool->GetUI().listWidget->isItemSelected(item)) {
+				selectMesh = i;
+				selected = true;
+			}
 			char* p = strtok(text.toStdString().data(), " ");
 			p = strtok(nullptr, " ");
 			renderMeshIndex[i] = std::stoi(p);
 		}
+		if (!selected)selectMesh = -1;
 		for (int i = 0; i < meshCount; i++) {
-			meshes[renderMeshIndex[i]]->Render(this);
+			int index = renderMeshIndex[i];
+			//メッシュが選択されているとき
+			if (index == selectMesh) world = DirectX::XMMatrixScaling(0.4f, 0.4f, 0.4f);
+			else world = DirectX::XMMatrixScaling(0.3f, 0.3f, 0.3f);
+			constantBuffer->Activate(DirectX::XMMatrixTranspose(world));
+			meshes[index]->Render(this);
 		}
 	}
 	//////////////////////////////////////////////////////////////////////////////////////////////

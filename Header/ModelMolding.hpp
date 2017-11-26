@@ -44,6 +44,7 @@ namespace Lobelia {
 		DirectX::XMMATRIX world;
 		int materialCount;
 		std::map<std::string, std::unique_ptr<Material>> materials;
+		int selectMesh;
 	private:
 		void CreateDirectXState();
 		void ConfigureStaticMesh(FL::Mesh* mesh);

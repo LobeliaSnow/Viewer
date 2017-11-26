@@ -19,27 +19,24 @@ namespace Lobelia {
 		old = cursorPos;
 	}
 	void Camera::MoveZ(const Lobelia::Mouse& mouse) {
-		//Math::Vector3 direction = target - pos;
-		//direction.Normalize();
-		//if (mouse.yWheel < 0)pos -= direction;
-		//else if (mouse.yWheel > 0)pos += direction;
 		radius += mouse.yWheel*0.01f;
 	}
-	void Camera::TargetPosMove(const Lobelia::Mouse& mouse) {
+	void Camera::TargetPosMove(const Lobelia::Mouse& mouse, const Lobelia::Keyboard& keyboard) {
+		Math::Vector3 direction = target - pos;
+		//Œ»Ý‚Ì’·‚³ŽZo
+		float length = direction.Length();
+		direction.Normalize();
 		if (mouse.center) {
-			Math::Vector3 direction = target - pos;
-			//Œ»Ý‚Ì’·‚³ŽZo
-			float length = direction.Length();
-			direction.Normalize();
 			//‰E•ûŒüŽZo
 			Math::Vector3 right = Math::Vector3::Cross(Math::Vector3(0, 1, 0), direction);
 			right.Normalize();
-			target += right*move.x*0.1f;
+			target += right*-move.x*0.1f;
 			Math::Vector3 up = Math::Vector3::Cross(direction, right);
 			target += up*move.y*0.1f;
 		}
+		if (keyboard.ctrl) target += direction*move.y*0.1f;
 	}
-	void Camera::SphereMove(const Lobelia::Mouse& mouse) {
+	void Camera::CylinderMove(const Lobelia::Mouse& mouse) {
 		if (mouse.left) {
 			radian += move.x*0.01f;
 			radianY += move.y*0.01f;
@@ -50,21 +47,6 @@ namespace Lobelia {
 		pos.y = cosf(radianY)*radius;
 		pos.z = cosf(radian)*radius;
 		pos += target;
-		//Math::Vector3 direction = target - pos;
-		////Œ»Ý‚Ì’·‚³ŽZo
-		//float length = direction.Length();
-		//direction.Normalize();
-		////‰E•ûŒüŽZo
-		//Math::Vector3 right = Math::Vector3::Cross(up, direction);
-		//right.Normalize();
-		////ˆÚ“®
-		//pos -= right*move.x * 0.1f;
-		//pos += up*move.y * 0.1f;
-		////‹——£•â³
-		//direction = pos - target;
-		//direction.Normalize();
-		////ˆÊ’uŒˆ’è
-		//pos = target + direction*length;
 	}
 	void Camera::CalcAndSetUpDirection() {
 		Math::Vector3 direction = target - pos;
@@ -78,7 +60,8 @@ namespace Lobelia {
 	void Camera::Update(const Lobelia::Mouse& mouse, const Lobelia::Keyboard& keyboard) {
 		MoveCursor();
 		MoveZ(mouse);
-		SphereMove(mouse);
+		TargetPosMove(mouse, keyboard);
+		CylinderMove(mouse);
 		CalcAndSetUpDirection();
 
 		view->SetEyePos(pos);

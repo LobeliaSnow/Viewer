@@ -9,8 +9,7 @@
 #include "Header/ModelExporter.hpp"
 #include "Header/Camera.hpp"
 
-class Tool : public QMainWindow
-{
+class Tool : public QMainWindow {
 	Q_OBJECT
 private:
 	Ui::ToolClass ui;
@@ -28,21 +27,28 @@ private:
 public:
 	Tool(QWidget *parent = Q_NULLPTR);
 	~Tool();
-private:
 public:
-	Ui::ToolClass& GetUI();
+	void SetTextToList(QStringList list);
+private:
 	void mousePressEvent(QMouseEvent* event)override;
 	void mouseReleaseEvent(QMouseEvent* event)override;
 	void wheelEvent(QWheelEvent* event)override;
 	void mouseMoveEvent(QMouseEvent* event)override;
 	void keyPressEvent(QKeyEvent *event)override;
 	void keyReleaseEvent(QKeyEvent *event)override;
+	void dragEnterEvent(QDragEnterEvent* event)override;
+	void dropEvent(QDropEvent *event)override;
 	bool eventFilter(QObject* obj, QEvent* event)override;
+private:
+	void LoadFbx(const char* file_path);
+public:
+	Ui::ToolClass& GetUI();
 	void Render();
-	public slots:	void FileOpen();
-	public slots:	void FileSaveDxd();
-	public slots:	void FileSaveMt();
-	public slots:	void FileSaveAnimation();
-	public slots:	void FileSaveAll();
+private:
+	private slots : void FileOpen();
+	private slots:	void FileSaveDxd();
+	private slots:	void FileSaveMt();
+	private slots:	void FileSaveAnimation();
+	private slots:	void FileSaveAll();
 };
 #include "Header/ModelMolding.hpp"
