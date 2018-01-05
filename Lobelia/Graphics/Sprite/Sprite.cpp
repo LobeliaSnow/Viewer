@@ -23,7 +23,7 @@ namespace Lobelia::Graphics {
 	//Spriteなので頂点数4は変わらないと考えて直値
 	Sprite::Sprite(const char* file_path) :mesh(std::make_unique<Mesh<Vertex>>(4)) {
 		std::unique_ptr<Reflection> reflector = std::make_unique<Reflection>(ResourceBank<VertexShader>::Get(DEFAULT_VERTEX_SHADER_SPRITE));
-		material = std::make_unique<Material>("Sprite Material", file_path);
+		material = std::make_shared<Material>("Sprite Material", file_path);
 		inputLayout = std::make_unique<InputLayout>(ResourceBank<VertexShader>::Get(DEFAULT_VERTEX_SHADER_SPRITE), reflector.get());
 	}
 	Sprite::~Sprite() = default;
@@ -73,10 +73,11 @@ namespace Lobelia::Graphics {
 		}
 	}
 	Material* Sprite::GetMaterial() { return material.get(); }
+	void Sprite::ChangeMaterial(std::shared_ptr<Material>& material) { this->material = material; }
 	const Math::Vector2* Sprite::GetSquareSSPos() { return vertex; }
 	void Sprite::Render(const Transform2D& transform, const Math::Vector2& uv_pos, const Math::Vector2& uv_size, Utility::Color color, bool set_default_pipeline) {
 		//少々考える
-		if(set_default_pipeline)Graphics::PipelineManager::PipelineGet(DEFAULT_PIPELINE_SPRITE)->Activate(true);
+		if (set_default_pipeline)Graphics::PipelineManager::PipelineGet(DEFAULT_PIPELINE_SPRITE)->Activate(true);
 		inputLayout->Set(); material->Set();
 		Device::GetContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		PositionPlant(transform);

@@ -35,7 +35,7 @@ namespace Lobelia::Graphics {
 	//DirectX::ComputeNormalMap
 	//DirectX::IsVideo
 	class TextureFileAccessor final {
-	private:
+	public:
 		enum class Extension {
 			NO_SUPPORT = -1,
 			PNG,
@@ -44,10 +44,10 @@ namespace Lobelia::Graphics {
 			BMP,
 		};
 	private:
-		static Extension JudgeExtension(const std::string& file_path);
 		static void LoadFile(const wchar_t* file_path, Extension extension, DirectX::TexMetadata* meta, DirectX::ScratchImage& image);
 	public:
-		static void Load(const char* file_path, Texture** texture);
+		static Extension JudgeExtension(const std::string& file_path);
+		static void Load(const char* file_path, std::shared_ptr<Texture>& texture);
 		//•Û‘¶‹@”\’Ç‰Á—\’è
 		static void Save(const char* file_path, Texture* texture);
 		static void CreateNormalMap(Texture* src, Texture** normal, float amplitude);

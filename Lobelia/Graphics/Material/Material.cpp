@@ -15,7 +15,8 @@
 namespace Lobelia::Graphics {
 	Material::Material(const char* name, const char* texture_path) :name(name), texture(nullptr), visible(true), constantBuffer(std::make_unique<ConstantBuffer<Data>>(2, Graphics::ShaderStageList::VS | Graphics::ShaderStageList::PS)) {
 		try {
-			TextureFileAccessor::Load(texture_path, &texture);
+			TextureFileAccessor::Load(texture_path, texture);
+			SetTexColor(0xFFFFFFFF);
 		}
 		catch (...) {
 			throw;
@@ -23,7 +24,7 @@ namespace Lobelia::Graphics {
 	}
 	Material::~Material() = default;
 	const std::string& Material::GetName() { return name; }
-	Texture* Material::GetTexture() { return texture; }
+	Texture* Material::GetTexture() { return texture.get(); }
 	void Material::SetDiffuseColor(const Math::Vector4& diffuse) { data.diffuse = diffuse; }
 	void Material::SetAmbientColor(const Math::Vector4& ambient) { data.ambient = ambient; }
 	void Material::SetSpecularColor(const Math::Vector4& specular) { data.specular = specular; }
@@ -37,7 +38,7 @@ namespace Lobelia::Graphics {
 	bool Material::IsVisible() { return visible; }
 
 	//いつでもテクスチャを切り替えれるように。
-	void Material::ChangeTexture(Texture* texture) { this->texture = texture; }
+	void Material::ChangeTexture(std::shared_ptr<Texture>& texture) { this->texture = texture; }
 	void Material::Set(bool texture, bool color) {
 		//if (IsSet())return;
 		if (this->texture&&texture)this->texture->Set(0, ShaderStageList::PS);

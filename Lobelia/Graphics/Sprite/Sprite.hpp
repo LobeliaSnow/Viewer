@@ -10,10 +10,11 @@ namespace Lobelia::Graphics {
 		};
 	private:
 		std::unique_ptr<Mesh<Vertex>> mesh;
-		std::unique_ptr<Material> material;
+		std::shared_ptr<Material> material;
 		std::unique_ptr<InputLayout> inputLayout;
 		//こいつが実際のスクリーンスペースの座標を所持している
 		Math::Vector2 vertex[4] = { {-1,-1},{-1,0},{0,-1},{0,0} };
+
 	private:
 		Math::Vector4 Trans2DPosition(Math::Vector2 pos);
 		void PositionPlant(const Transform2D& transform);
@@ -25,6 +26,7 @@ namespace Lobelia::Graphics {
 		Sprite(const char* file_path);
 		~Sprite();
 		Material* GetMaterial();
+		void ChangeMaterial(std::shared_ptr<Material>& material);
 		const Math::Vector2* GetSquareSSPos();
 		void Render(const Transform2D& transform, const Math::Vector2& uv_pos, const Math::Vector2& uv_size, Utility::Color color, bool set_default_pipeline = true);
 	};

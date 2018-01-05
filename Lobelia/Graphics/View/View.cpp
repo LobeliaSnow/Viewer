@@ -27,10 +27,6 @@ namespace Lobelia::Graphics {
 	void View::ChangeViewport(const Math::Vector2& pos, const Math::Vector2& size) { CreateViewport(pos, size); }
 	void View::Activate() {
 		CreateView(data);
-		//buffer.pos.x = DirectX::XMVectorGetX(data.eye);
-		//buffer.pos.y = DirectX::XMVectorGetY(data.eye);
-		//buffer.pos.z = DirectX::XMVectorGetZ(data.eye);
-		//buffer.pos.w = DirectX::XMVectorGetW(data.eye);
 		constantBuffer->Activate(buffer);
 		Device::GetContext()->RSSetViewports(1, &viewport);
 		nowSize = size;

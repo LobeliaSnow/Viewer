@@ -104,26 +104,30 @@ namespace Lobelia::Graphics {
 		if (FAILED(hr))STRICT_THROW("テクスチャが読み込めませんでした");
 	}
 
-	void TextureFileAccessor::Load(const char* file_path, Texture** texture) {
-		if (Utility::FilePathControl::GetFilename(file_path) == ".")return;
-		if (ResourceBank<Texture>::IsExist(file_path)) {
-			*texture = ResourceBank<Texture>::Get(file_path);
-			return;
-		}
-		if (strcmp(file_path, "") == 0) {
+	void TextureFileAccessor::Load(const char* file_path, std::shared_ptr<Texture>& texture) {
+		std::string name = Utility::FilePathControl::GetFilename(file_path);
+		//if (ResourceBank<Texture>::IsExist(file_path)) ResourceBank<Texture>::UnRegister(file_path);
+		if (strcmp(name.c_str(), "") == 0 || strcmp(name.c_str(), ".") == 0) {
 			DXGI_SAMPLE_DESC msaa = { 1,0 };
-			*texture = ResourceBank<Texture>::Factory(file_path, Math::Vector2(1, 1), DXGI_FORMAT_R32G32B32A32_FLOAT, D3D11_BIND_SHADER_RESOURCE, msaa);
+			texture = std::make_shared<Texture>(Math::Vector2(1, 1), DXGI_FORMAT_R32G32B32A32_FLOAT, D3D11_BIND_SHADER_RESOURCE, msaa);
 			return;
 		}
 		Extension extension = JudgeExtension(file_path);
 		DirectX::TexMetadata meta = {};
 		DirectX::ScratchImage image = {};
 		std::wstring filePath = Utility::ConverteWString(file_path);
-		LoadFile(filePath.c_str(), extension, &meta, image);
-		ComPtr<ID3D11Texture2D> renderTransform;
-		HRESULT hr = DirectX::CreateTexture(Device::Get().Get(), image.GetImages(), image.GetImageCount(), image.GetMetadata(), reinterpret_cast<ID3D11Resource**>(renderTransform.GetAddressOf()));
+		try {
+			LoadFile(filePath.c_str(), extension, &meta, image);
+		}
+		catch (...) {
+			DXGI_SAMPLE_DESC msaa = { 1,0 };
+			texture = std::make_shared<Texture>(Math::Vector2(1, 1), DXGI_FORMAT_R32G32B32A32_FLOAT, D3D11_BIND_SHADER_RESOURCE, msaa);
+			return;
+		}
+		ComPtr<ID3D11Texture2D> textureBuffer;
+		HRESULT hr = DirectX::CreateTexture(Device::Get().Get(), image.GetImages(), image.GetImageCount(), image.GetMetadata(), reinterpret_cast<ID3D11Resource**>(textureBuffer.GetAddressOf()));
 		if (FAILED(hr))STRICT_THROW("テクスチャの作成に失敗しました");
-		*texture = ResourceBank<Texture>::Factory(file_path, renderTransform);
+		texture = std::make_shared<Texture>(textureBuffer);
 	}
 	void TextureFileAccessor::Save(const char* file_path, Texture* texture) {
 		HRESULT 	hr = S_OK;

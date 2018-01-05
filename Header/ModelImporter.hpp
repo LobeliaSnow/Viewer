@@ -1,4 +1,6 @@
 #pragma once
+#include <mutex>
+
 namespace Lobelia {
 	//ƒc[ƒ‹‘¤‚Åî•ño—Í‚µ‚½‚¢ê‡‚Í‚±‚±‚©‚çæ“¾
 	class FbxImporter {

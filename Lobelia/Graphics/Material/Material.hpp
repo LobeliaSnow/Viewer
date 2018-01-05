@@ -13,7 +13,7 @@ namespace Lobelia::Graphics {
 		};
 	private:
 		std::string name;
-		Texture* texture;
+		std::shared_ptr<Texture> texture;
 		Data data;
 		bool visible;
 		std::unique_ptr<ConstantBuffer<Data>> constantBuffer;
@@ -29,7 +29,7 @@ namespace Lobelia::Graphics {
 		void ChangeVisible(bool visible);
 		bool IsVisible();
 		//いつでもテクスチャを切り替えれるように。
-		void ChangeTexture(Texture* texture);
+		void ChangeTexture(std::shared_ptr<Texture>& texture);
 		void Set(bool texture = true, bool color = true);
 	};
 }

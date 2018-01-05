@@ -1,12 +1,10 @@
 #include "Tool.h"
-#include "qfiledialog.h"
-#include "qtextcodec.h"
-#include "qmouseeventtransition.h"
-#include <QMouseEvent>
-#include "qdrag.h"
-#include "qevent.h"
-#include "qmimedata.h"
-
+#include "qmessagebox.h"
+#include <future>
+#include <qthread.h>
+#include <QtConcurrent/qtconcurrentrun.h>
+//TODO : 複数ウインドウの使い方を覚えたのでそれを使い、メッシュウインドウ作成
+//TODO : ↑テクスチャビュワー等の作成
 //TODO : まともに使えるようにする。
 //TODO : 同じマテリアルなのに複数のサブセットに分かれている場合は結合できるように組み替える。
 //TODO : エクスポートをMoldingクラスからするように改良。それにより描画順などその他情報を編集することが可能となる。
@@ -15,6 +13,8 @@
 //TODO : テクスチャを見れる機能とかも欲しい
 //TODO : 今適当だから例外吐きます
 //TODO : dxdも読めるように
+//TODO : このツール用にライブラリ改造しています(テクスチャ読み込みやリソースバンク等)
+//面白そう std::initializer_list<>
 
 Tool::Tool(QWidget *parent)
 	: QMainWindow(parent)
@@ -35,7 +35,7 @@ Tool::Tool(QWidget *parent)
 	Lobelia::Graphics::Environment::GetInstance()->SetAmbientColor(0xFFFFFFFF);
 	Lobelia::Graphics::Environment::GetInstance()->SetLightDirection(Lobelia::Math::Vector3(0.0f, 1.0f, 1.0f));
 	Lobelia::Graphics::Environment::GetInstance()->Activate();
-	mouse = {};
+	mouse = {}; keyboard = {};
 	installEventFilter(this);
 	setMouseTracking(true);
 	startTimer(16);
@@ -44,18 +44,30 @@ Tool::Tool(QWidget *parent)
 	connect(ui.actionmaterial_mt, SIGNAL(triggered()), this, SLOT(FileSaveMt()));
 	connect(ui.action_Animation_anm, SIGNAL(triggered()), this, SLOT(FileSaveAnimation()));
 	connect(ui.actionA_ll, SIGNAL(triggered()), this, SLOT(FileSaveAll()));
+	connect(ui.listWidget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(OpenMeshWindow()));
+	connect(ui.listMaterial, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(OpenMaterialWindow()));
 	importer = std::make_unique<Lobelia::FbxImporter>();
-	dxdExporter = std::make_unique<Lobelia::DxdExporter>();
-	matExporter = std::make_unique<Lobelia::MaterialExporter>();
-	anmExporter = std::make_unique<Lobelia::AnimationExporter>();
+	dxdExporter = std::make_unique<Lobelia::Future::DxdExporter>();
+	//dxdExporter = std::make_unique<Lobelia::Ancient::DxdExporter>();
+	matExporter = std::make_unique<Lobelia::Future::MaterialExporter>();
+	//matExporter = std::make_unique<Lobelia::Ancient::MaterialExporter>();
+	anmExporter = std::make_unique<Lobelia::Ancient::AnimationExporter>();
 	//QObject::connect(timer, SIGNAL(timeout()), myClass, SLOT(onTimer()));
 	oldPoint = {};
+	meshWindow = std::make_unique<MeshWindow>(this);
+	materialWindow = std::make_unique<MaterialWindow>(this);
 }
 Tool::~Tool() {
+	meshWindow.reset();
+	materialWindow.reset();
 	Lobelia::Shutdown();
 	importer.reset(nullptr);
 	FL::System::GetInstance()->Finalize();
+
 };
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//  アイコンへのドラッグイベント
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void Tool::SetTextToList(QStringList list) {
 	foreach(QString str, list) {
 		std::string path = str.toStdString();
@@ -65,12 +77,21 @@ void Tool::SetTextToList(QStringList list) {
 		break;
 	}
 }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//  ファイル読み込み関連
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void Tool::LoadFbx(const char* file_path) {
-	ui.listWidget->clear();
-	importer->Load(file_path);
-	//ui.textBrowser->setText(QString::fromLocal8Bit("インポート開始"));
+	filePath = file_path;
+	meshWindow->Hide();
+	materialWindow->Hide();
+	ui.listWidget->setCurrentRow(-1);
+	importer->Load(filePath.c_str());
 	modelMolding = std::make_unique<Lobelia::ModelMolding>(importer.get(), this);
-	//ui.textBrowser->setText(QString::fromLocal8Bit("インポート終了"));
+	_findfirst(filePath.c_str(), &fileDate);
+	//CoUninitialize();
 }
 void Tool::FileOpen() {
 	QString path = QFileDialog::getOpenFileName(this, "Import File");
@@ -81,13 +102,15 @@ void Tool::FileSaveDxd() {
 	if (importer->IsEmpty())return;
 	QString path = QFileDialog::getSaveFileName(this, "Export File");
 	if (path.isEmpty())return;
-	dxdExporter->Save(importer.get(), path.toLocal8Bit().data());
+	dxdExporter->Save(modelMolding.get(), path.toLocal8Bit().data());
+	//dxdExporter->Save(importer.get(), path.toLocal8Bit().data());
 }
 void Tool::FileSaveMt() {
 	if (importer->IsEmpty())return;
 	QString path = QFileDialog::getSaveFileName(this, "Export File");
 	if (path.isEmpty())return;
-	matExporter->Save(importer.get(), path.toLocal8Bit().data());
+	matExporter->Save(modelMolding.get(), path.toLocal8Bit().data());
+	//matExporter->Save(importer.get(), path.toLocal8Bit().data());
 }
 void Tool::FileSaveAnimation() {
 	if (importer->IsEmpty())return;
@@ -111,13 +134,35 @@ void Tool::FileSaveAll() {
 	if (path.isEmpty())return;
 	std::string pathStr = path.toLocal8Bit();
 	std::string directory = Lobelia::Utility::FilePathControl::GetParentDirectory(pathStr);
-	std::string matName = Lobelia::Utility::FilePathControl::GetFilename(pathStr);
+	std::string matName = directory + "/" + Lobelia::Utility::FilePathControl::GetFilename(pathStr);
 	StringReplace(matName, "dxd", "mt");
-	dxdExporter->Save(importer.get(), pathStr.c_str());
-	matExporter->Save(importer.get(), matName.c_str());
-	anmExporter->Save(importer.get(), directory.c_str());
+	dxdExporter->Save(modelMolding.get(), pathStr.c_str());
+	matExporter->Save(modelMolding.get(), matName.c_str());
+	//dxdExporter->Save(importer.get(), pathStr.c_str());
+	//matExporter->Save(importer.get(), matName.c_str());
+	anmExporter->Save(importer.get(), (directory + "/").c_str());
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void Tool::OpenMeshWindow() {
+	Lobelia::MeshWidget* item = dynamic_cast<Lobelia::MeshWidget*>(ui.listWidget->currentItem());
+	modelMolding->GetMeshWidget(item->GetIndex())->OpenMeshWindow();
+}
+void Tool::OpenMaterialWindow() {
+	Lobelia::MaterialWidget* item = dynamic_cast<Lobelia::MaterialWidget*>(ui.listMaterial->currentItem());
+	modelMolding->GetMaterialWidget(item->GetIndex())->OpenMaterialWindow();
 }
 Ui::ToolClass& Tool::GetUI() { return ui; }
+void Tool::ShowMeshWindow(const MeshWindow::Parameter& parameter) {
+	meshWindow->Show(parameter);
+}
+void Tool::ShowMaterialWindow(const MaterialWindow::Parameter& parameter) {
+	materialWindow->Show(parameter);
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//	イベント関数
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void Tool::mousePressEvent(QMouseEvent* event) {
 	switch (event->button()) {
 	case Qt::LeftButton:			mouse.left = true;		break;
@@ -147,8 +192,21 @@ void Tool::mouseMoveEvent(QMouseEvent* event) {
 	oldPoint = point;
 }
 void Tool::keyPressEvent(QKeyEvent *event) {
+	auto QuitConfirmation = [this]() {
+		QMessageBox msgBox(this);
+		msgBox.setText(QString::fromLocal8Bit("終了しますか？"));
+		msgBox.setWindowTitle(QString::fromLocal8Bit("Quit?"));
+		msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
+		msgBox.setDefaultButton(QMessageBox::No);
+		msgBox.setButtonText(QMessageBox::Yes, QString::fromLocal8Bit("はい"));
+		msgBox.setButtonText(QMessageBox::Cancel, QString::fromLocal8Bit("キャンセル"));
+		msgBox.setIcon(QMessageBox::Icon::Question);
+		int res = msgBox.exec();
+		if (res == QMessageBox::Yes)return true;
+		else if (res == QMessageBox::Cancel)return false;
+	};
 	switch (event->key()) {
-	case Qt::Key::Key_Escape:		qApp->quit();				break;
+	case Qt::Key::Key_Escape:		if (QuitConfirmation())qApp->quit();	break;
 	case Qt::Key::Key_Control:	keyboard.ctrl = true;		break;
 	case Qt::Key::Key_Alt:			keyboard.alt = true;		break;
 	}
@@ -171,19 +229,32 @@ void Tool::dropEvent(QDropEvent *event) {
 	if (path.isEmpty())return;
 	std::string extension = Lobelia::Utility::FilePathControl::GetExtension(path.toStdString());
 	transform(extension.begin(), extension.end(), extension.begin(), tolower);
-	if (extension == ".fbx")	LoadFbx(path.toLocal8Bit().data());
+	if (extension == ".fbx")
+		LoadFbx(path.toLocal8Bit().data());
 }
 bool Tool::eventFilter(QObject* obj, QEvent* event) {
 	if (camera)camera->Update(mouse, keyboard);
 	if (keyboard.ctrl)ui.listWidget->setCurrentRow(-1);
 	mouse.xWheel = 0.0f; mouse.yWheel = 0.0f;
+	Update();
 	Render();
 	return false;
 }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void Tool::Update() {
+	if (filePath.empty())return;
+	_finddata_t fileDataNow;
+	_findfirst(filePath.c_str(), &fileDataNow);
+	if (fileDataNow.time_access > fileDate.time_access)	LoadFbx(filePath.c_str());
+	if (modelMolding)modelMolding->Update(this);
+}
 void Tool::Render() {
 	swapChain->Clear(0xFF000000);
-	Lobelia::Graphics::Transform2D transform = {};
-	auto& glWidget = ui.openGLWidget;
+	swapChain->GetRenderTarget()->Activate();
+	//Lobelia::Graphics::Transform2D transform = {};
+	//auto& glWidget = ui.openGLWidget;
 	if (modelMolding)modelMolding->Render(this);
 	swapChain->Present();
 }
